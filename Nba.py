@@ -22,11 +22,17 @@ nba_payroll['inflationAdjPayroll'] = nba_payroll['inflationAdjPayroll'].astype('
 nba_payroll.head()
 #nba_payroll.info()
 
+# inserindo novo indice
 nba_payroll = nba_payroll.reset_index(drop=True).reset_index()
 nba_payroll['index'] += 1
 
-nba_payroll['date'] = '2023-04-13'
-nba_payroll['date'] = pd.to_datetime(nba_payroll['date'])
+from datetime import datetime
+# 
+nba_payroll['creation_date'] = datetime.now()#'2023-04-13'
+nba_payroll['creation_date'] = pd.to_datetime(nba_payroll['creation_date']).dt.date
+
+
+nba_payroll.head(100)
 
 # Carregando e tratando os dados NBA Box Score
 nba_box = pd.DataFrame(pd.read_csv('c:/Users/Vildson/Documents/Engenharia_Dados/Dados/NBAplayers/NBA Player Box Score Stats(1950 - 2022).csv'))
@@ -58,6 +64,144 @@ nba_Salaries['inflationAdjSalary'] = nba_Salaries['inflationAdjSalary'].astype('
 
 
 # Definindo conexão com o banco de dados
+conn = psycopg2.connect(
+    host="localhost",
+    database="postgres",
+    user="postgres",
+    password="postgres")
+
+cur = conn.cursor()
+
+cur.execute('''create schema nba''')
+
+cur.execute("""
+      CREATE TABLE nba.NBA_Payroll (
+        id SERIAL PRIMARY KEY, 
+        team VARCHAR(200), 
+        seasonStartYear integer,
+        payroll int4 null,
+        inflationAdjPayroll integer,
+        creation_date timestamp DEFAULT current_timestamp 
+      );"""
+)
+
+
+cur.execute('''CREATE TABLE nba.NBA_Player_Box_Score (
+        id SERIAL PRIMARY KEY,
+        Season INTEGER,
+        Game_ID INTEGER,
+        PLAYER_NAME VARCHAR(50),
+        Team VARCHAR(50),
+        GAME_DATE VARCHAR(50),
+        MATCHUP VARCHAR(50),
+        WL VARCHAR(50),
+        MIN INTEGER,
+        FGM INTEGER,
+        FGA DECIMAL(10,2),
+        FG_PCT DECIMAL(10,2),
+        FG3M DECIMAL(10,2),
+        FG3A DECIMAL(10,2),
+        FG3_PCT DECIMAL(10,2),
+        FTM INTEGER,
+        FTA DECIMAL(10,2),
+        FT_PCT DECIMAL(10,2),
+        OREB DECIMAL(10,2),
+        DREB DECIMAL(10,2),
+        REB DECIMAL(10,2),
+        AST DECIMAL(10,2),
+        STL DECIMAL(10,2),
+        BLK DECIMAL(10,2),
+        TOV DECIMAL(10,2),
+        PF DECIMAL(10,2),
+        PTS INTEGER,
+        PLUS_MINUS DECIMAL(10,2),
+        VIDEO_AVAILABLE INTEGER,
+        creation_date timestamp DEFAULT current_timestamp 
+      );'''
+)
+
+
+conn.commit()
+nba_payroll.to_sql('nba_payroll',con=conn, if_exists='append')
+
+***********************************************************************
+# Função para criar conexão com banco
+def conecta_db():
+  con = psycopg2.connect(host='localhost', 
+                         database='postgres',
+                         user='postgres', 
+                         password='postgres')
+  return con
+
+# Função para criar schema
+def criar_schema(sql):
+  con = conecta_db()
+  cur = con.cursor()
+  cur.execute(sql)
+  con.commit()
+  con.close() 
+
+# Criando o schema NBA 
+sql = '''
+    CREATE SCHEMA nba_players
+;'''
+criar_schema(sql)
+
+# Função para criar tabela no banco
+def criar_db(sql):
+  con = conecta_db()
+  cur = con.cursor()
+  cur.execute(sql)
+  con.commit()
+  con.close()
+
+# Dropando a tabela caso ela já exista
+sql = 'DROP TABLE IF EXISTS nba_players.nba_payroll'
+criar_db(sql)
+# Criando a tabela dos deputados
+sql = '''CREATE TABLE nba_players.nba_payroll (
+        id SERIAL PRIMARY KEY, 
+        team VARCHAR(100) null, 
+        seasonStartYear int4 null,
+        payroll int4 null,
+        inflationAdjPayroll int4 null,
+        creation_date timestamp DEFAULT current_timestamp null
+      )'''
+criar_db(sql)
+
+
+
+def createTable(cur):
+   try:
+      # Criar a tabela de 
+      cur.execute('''
+          CREATE TABLE nba_players.nba_payroll (
+          id SERIAL PRIMARY KEY, 
+          team VARCHAR(100) null, 
+          seasonStartYear int4 null,
+          payroll int4 null,
+          inflationAdjPayroll int4 null,
+          creation_date timestamp DEFAULT current_timestamp null
+        )'''
+      )
+
+
+
+
+
+
+
+
+
+
+
+
+class LerCsv:
+   def __init__(self):
+      pasta = "c:/Users/Vildson/Documents/Engenharia_Dados/Dados/NBAplayers/"
+
+
+
 url = 'postgresql+psycopg2://postgres:1607@localhost:5432/postgres'
 engine = create_engine(url,connect_args={'options': '-csearch_path=nba_players'})
 
@@ -77,7 +221,7 @@ with engine.connect() as conn:
     query = conn.execute(text(sql))         
 df = pd.DataFrame(query.fetchall())
 
-nba.to_sql('nba_payroll',con=con, if_exists='append')
+nba_payroll.to_sql('nba_payroll',con=conn, if_exists='append')
 
 
 
@@ -102,7 +246,7 @@ cur = con.cursor()
 newdf.to_sql('<table_name>', con=engine, if_exists='append')
 
 # Drop old table and create new empty table
-nba.head(0).to_sql('nba_payroll', engine, if_exists='replace',index=False)
+nba_payroll.to_sql('nba_payroll', engine, if_exists='replace',index=False)
 conn = engine.raw_connection()
 cur = conn.cursor()
 output = io.StringIO()
@@ -246,64 +390,5 @@ df = pd.read_sql_query(sql,engine)
 
 engine.execute(sql)
 
-
-def conecta_db():
-  con = psycopg2.connect(host='localhost', 
-                         database='postgres',
-                         user='postgres', 
-                         password='1607')
-  return con
-
-# Função para criar schema
-def criar_schema(sql):
-  con = conecta_db()
-  cur = con.cursor()
-  cur.execute(sql)
-  con.commit()
-  con.close() 
-
-# Criando o schema NBA 
-sql = '''
-    CREATE SCHEMA nba_players
-;'''
-criar_schema(sql)
-
-# Função para criar tabela no banco
-def criar_db(sql):
-  con = conecta_db()
-  cur = con.cursor()
-  cur.execute(sql)
-  con.commit()
-  con.close()
-
-# Dropando a tabela caso ela já exista
-sql = 'DROP TABLE IF EXISTS nba_players.nba_payroll'
-criar_db(sql)
-# Criando a tabela dos deputados
-sql = '''CREATE TABLE nba_players.nba_payroll (
-        id SERIAL PRIMARY KEY, 
-        team VARCHAR(100) null, 
-        seasonStartYear int4 null,
-        payroll int4 null,
-        inflationAdjPayroll int4 null,
-        creation_date timestamp DEFAULT current_timestamp null
-      )'''
-criar_db(sql)
-
-
-
-def createTable(cur):
-   try:
-      # Criar a tabela de 
-      cur.execute('''
-          CREATE TABLE nba_players.nba_payroll (
-          id SERIAL PRIMARY KEY, 
-          team VARCHAR(100) null, 
-          seasonStartYear int4 null,
-          payroll int4 null,
-          inflationAdjPayroll int4 null,
-          creation_date timestamp DEFAULT current_timestamp null
-        )'''
-      )
 
 
